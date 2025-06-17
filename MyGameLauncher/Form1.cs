@@ -7,8 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows.Forms;
 using System.Text.Json;
+using System.Windows.Forms;
 
 namespace MyGameLauncher
 {
@@ -42,41 +42,6 @@ namespace MyGameLauncher
         [DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
         private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
 
-
-        private static Icon GetHighResIcon(string path)
-        {
-            if (Path.GetExtension(path).ToLower() != ".exe" && Path.GetExtension(path).ToLower() != ".lnk")
-            {
-                try { return Icon.ExtractAssociatedIcon(path); } catch { return SystemIcons.Application; }
-            }
-
-            IntPtr largeIconHandle = IntPtr.Zero;
-            try
-            {
-                IntPtr[] hLarge = new IntPtr[1];
-                if (ExtractIconEx(path, 0, hLarge, null, 1) > 0)
-                {
-                    largeIconHandle = hLarge[0];
-                    if (largeIconHandle != IntPtr.Zero)
-                    {
-                        return (Icon)Icon.FromHandle(largeIconHandle).Clone();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[日志] 使用ExtractIconEx提取图标失败: {path} - {ex.Message}");
-            }
-            finally
-            {
-                if (largeIconHandle != IntPtr.Zero)
-                {
-                    DestroyIcon(largeIconHandle);
-                }
-            }
-
-            try { return Icon.ExtractAssociatedIcon(path); } catch { return SystemIcons.Application; }
-        }
         #endregion
 
         #region Animation Engine
@@ -90,6 +55,8 @@ namespace MyGameLauncher
         private readonly Dictionary<Control, AnimationState> _animatedControls = new Dictionary<Control, AnimationState>();
         private readonly Timer _animationTimer;
         private readonly Timer _fadeInTimer;
+        private Timer _closeTimer; 
+        private bool _isClosing = false;
         #endregion
 
         #region Configuration Settings
@@ -121,7 +88,9 @@ namespace MyGameLauncher
 
             _fadeInTimer = new Timer { Interval = 20 };
             _fadeInTimer.Tick += FadeInTimer_Tick;
-
+            _closeTimer = new Timer { Interval = 15 }; 
+            _closeTimer.Tick += CloseTimer_Tick;
+            this.FormClosing += Form1_FormClosing;
             LoadSettings();
             SetupModernUI();
             LoadApplications();
@@ -171,7 +140,6 @@ namespace MyGameLauncher
             this.Text = _settings.WindowTitle;
 
             this.Load += Form1_Load;
-            // **核心改动**: 将布局调整函数绑定到窗口尺寸变化事件
             this.Resize += (s, e) => AdjustLayout();
 
             SetupCustomTitleBar();
@@ -180,7 +148,7 @@ namespace MyGameLauncher
         private void Form1_Load(object sender, EventArgs e)
         {
             ApplyRoundCorners();
-            AdjustLayout(); // 初始加载时也调整一次布局
+            AdjustLayout(); 
             _fadeInTimer.Start();
         }
 
@@ -192,7 +160,7 @@ namespace MyGameLauncher
             }
             else
             {
-                this.Region = System.Drawing.Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 20, 20));
+                this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 20, 20));
             }
         }
 
@@ -227,7 +195,13 @@ namespace MyGameLauncher
             closeButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(232, 17, 35);
             closeButton.FlatAppearance.MouseDownBackColor = Color.FromArgb(200, 17, 35);
 
-            closeButton.Click += (s, e) => this.Close();
+            closeButton.Click += (s, e) => {
+                if (!_isClosing)
+                {
+                    _isClosing = true;
+                    _closeTimer.Start();
+                }
+            };
             titleBar.MouseDown += TitleBar_MouseDown;
             titleBar.MouseUp += TitleBar_MouseUp;
             titleBar.MouseMove += TitleBar_MouseMove;
@@ -247,8 +221,6 @@ namespace MyGameLauncher
             if (!Directory.Exists(appsFolderPath))
             {
                 Directory.CreateDirectory(appsFolderPath);
-                MessageBox.Show($"已自动创建 'Apps' 文件夹。\n\n请将您的应用文件放入以下路径后重启：\n{appsFolderPath}", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
             }
 
             List<string> allFiles = new List<string>();
@@ -270,97 +242,102 @@ namespace MyGameLauncher
                 this.flowLayoutPanel1.Controls.Add(emptyLabel);
                 return;
             }
-
+            this.flowLayoutPanel1.SuspendLayout();
             foreach (string filePath in allFiles)
             {
                 CreateApplicationTile(filePath);
             }
+            this.flowLayoutPanel1.ResumeLayout(true);
         }
 
         private void CreateApplicationTile(string filePath)
         {
-            Panel tilePanel = new Panel
-            {
-                Size = new Size(120, 140),
-                Margin = new Padding(15),
-                BackColor = this.flowLayoutPanel1.BackColor,
-                Tag = filePath
-            };
-
-            PictureBox pictureBox = new PictureBox
-            {
-                SizeMode = PictureBoxSizeMode.Zoom,
-                Size = new Size(64, 64),
-                Location = new Point((tilePanel.Width - 64) / 2, 20),
-                Tag = filePath,
-                BackColor = Color.Transparent
-            };
-
             string targetPath = filePath;
             if (Path.GetExtension(filePath).ToLower() == ".lnk")
             {
                 targetPath = GetShortcutTarget(filePath);
             }
-            pictureBox.Image = GetHighResIcon(targetPath)?.ToBitmap();
 
-            Label nameLabel = new Label
+            using (Bitmap sourceBitmap = HighResIconExtractor.GetIconFromFile(targetPath))
             {
-                Text = Path.GetFileNameWithoutExtension(filePath),
-                ForeColor = Color.Black,
-                Font = new Font("Segoe UI Semibold", 10F),
-                Dock = DockStyle.Bottom,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Height = 40,
-                Tag = filePath,
-                BackColor = Color.Transparent
-            };
-
-            var hoverColor = Color.FromArgb(240, 240, 240);
-            var normalColor = this.flowLayoutPanel1.BackColor;
-
-            EventHandler enterHandler = (s, e) => StartAnimation(tilePanel, hoverColor);
-            EventHandler leaveHandler = (s, e) => StartAnimation(tilePanel, normalColor);
-
-            tilePanel.MouseEnter += enterHandler;
-            pictureBox.MouseEnter += enterHandler;
-            nameLabel.MouseEnter += enterHandler;
-
-            tilePanel.MouseLeave += leaveHandler;
-            pictureBox.MouseLeave += leaveHandler;
-            nameLabel.MouseLeave += leaveHandler;
-
-            tilePanel.Click += Tile_Click;
-            pictureBox.Click += Tile_Click;
-            nameLabel.Click += Tile_Click;
-
-            tilePanel.Paint += (s, e) => {
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (var brush = new SolidBrush(tilePanel.BackColor))
+                if (sourceBitmap == null) return;
+                var tileSize = new Size(90, 111);
+                var pictureBoxSize = new Size(55, 55);
+                var pictureBoxLocation = new Point((90 - 55) / 2, 14);
+                var labelHeight = 31;
+                Panel tilePanel = new Panel
                 {
-                    Rectangle rect = new Rectangle(0, 0, tilePanel.Width - 1, tilePanel.Height - 1);
-                    int radius = 12;
-                    GraphicsPath path = new GraphicsPath();
-                    path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
-                    path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
-                    path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
-                    path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
-                    path.CloseFigure();
-                    e.Graphics.FillPath(brush, path);
+                    Size = tileSize,
+                    Margin = new Padding(15),
+                    BackColor = this.flowLayoutPanel1.BackColor,
+                    Tag = filePath
+                };
 
-                    using (var pen = new Pen(Color.FromArgb(230, 230, 230), 1))
+                PictureBox pictureBox = new PictureBox
+                {
+                    Size = pictureBoxSize,
+                    Location = pictureBoxLocation,
+                    Tag = filePath,
+                    BackColor = Color.Transparent,
+                    SizeMode = PictureBoxSizeMode.Zoom
+                };
+
+                pictureBox.Image = ResizeImage(sourceBitmap, pictureBoxSize);
+
+                Label nameLabel = new Label
+                {
+                    Text = Path.GetFileNameWithoutExtension(filePath),
+                    ForeColor = Color.Black,
+                    Font = new Font("Segoe UI Semibold", 9F),
+                    Dock = DockStyle.Bottom,
+                    TextAlign = ContentAlignment.TopCenter,
+                    Height = labelHeight,
+                    Padding = new Padding(5, 10, 5, 5), 
+                    Tag = filePath,
+                    BackColor = Color.Transparent
+                };
+
+                var hoverColor = Color.FromArgb(240, 240, 240);
+                var normalColor = this.flowLayoutPanel1.BackColor;
+                EventHandler enterHandler = (s, e) => StartAnimation(tilePanel, hoverColor);
+                EventHandler leaveHandler = (s, e) => StartAnimation(tilePanel, normalColor);
+                tilePanel.MouseEnter += enterHandler;
+                pictureBox.MouseEnter += enterHandler;
+                nameLabel.MouseEnter += enterHandler;
+                tilePanel.MouseLeave += leaveHandler;
+                pictureBox.MouseLeave += leaveHandler;
+                nameLabel.MouseLeave += leaveHandler;
+                tilePanel.Click += Tile_Click;
+                pictureBox.Click += Tile_Click;
+                nameLabel.Click += Tile_Click;
+                tilePanel.Paint += (s, e) =>
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (var brush = new SolidBrush(tilePanel.BackColor))
                     {
-                        e.Graphics.DrawPath(pen, path);
+                        Rectangle rect = new Rectangle(0, 0, tilePanel.Width - 1, tilePanel.Height - 1);
+                        int radius = 12;
+                        GraphicsPath path = new GraphicsPath();
+                        path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
+                        path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
+                        path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
+                        path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
+                        path.CloseFigure();
+                        e.Graphics.FillPath(brush, path);
+                        using (var pen = new Pen(Color.FromArgb(230, 230, 230), 1))
+                        {
+                            e.Graphics.DrawPath(pen, path);
+                        }
                     }
-                }
-            };
+                };
 
-            tilePanel.Controls.Add(pictureBox);
-            tilePanel.Controls.Add(nameLabel);
-            this.flowLayoutPanel1.Controls.Add(tilePanel);
+                tilePanel.Controls.Add(pictureBox);
+                tilePanel.Controls.Add(nameLabel);
+                this.flowLayoutPanel1.Controls.Add(tilePanel);
+            }
         }
 
         #region Animation and Layout
-        // **新增**: 智能布局调整函数
         private void AdjustLayout()
         {
             if (flowLayoutPanel1.Controls.Count == 0 || !flowLayoutPanel1.IsHandleCreated) return;
@@ -368,14 +345,11 @@ namespace MyGameLauncher
             var firstTile = flowLayoutPanel1.Controls[0];
             int tileFullWidth = firstTile.Width + firstTile.Margin.Left + firstTile.Margin.Right;
             int panelWidth = flowLayoutPanel1.ClientSize.Width;
-
             if (tileFullWidth <= 0) return;
-
             int tilesPerRow = Math.Max(1, panelWidth / tileFullWidth);
             int totalContentWidth = tilesPerRow * tileFullWidth;
             int emptySpace = panelWidth - totalContentWidth;
-            int sidePadding = Math.Max(25, emptySpace / 2); // 保证最小边距
-
+            int sidePadding = Math.Max(25, emptySpace / 2); 
             flowLayoutPanel1.Padding = new Padding(sidePadding, 25, sidePadding, 25);
         }
 
@@ -405,7 +379,6 @@ namespace MyGameLauncher
 
                 double elapsed = (DateTime.Now - state.StartTime).TotalMilliseconds;
                 double progress = Math.Min(elapsed / state.Duration.TotalMilliseconds, 1.0);
-
                 int r = (int)(state.StartColor.R + (state.TargetColor.R - state.StartColor.R) * progress);
                 int g = (int)(state.StartColor.G + (state.TargetColor.G - state.StartColor.G) * progress);
                 int b = (int)(state.StartColor.B + (state.TargetColor.B - state.StartColor.B) * progress);
@@ -428,13 +401,31 @@ namespace MyGameLauncher
         {
             if (this.Opacity < 1.0)
             {
-                this.Opacity += 0.05;
+                this.Opacity += 0.3;
             }
             else
             {
                 this.Opacity = 1.0;
                 _fadeInTimer.Stop();
                 _fadeInTimer.Dispose();
+            }
+        }
+
+
+
+        /// <summary>
+        /// 关闭动画的核心逻辑
+        /// </summary>
+        private void CloseTimer_Tick(object sender, EventArgs e)
+        {
+            if (this.Opacity > 0.05)
+            {
+                this.Opacity -= 0.05;
+            }
+            else
+            {
+                _closeTimer.Stop();
+                Application.Exit();
             }
         }
         #endregion
@@ -457,6 +448,7 @@ namespace MyGameLauncher
                 try
                 {
                     Process.Start(filePath);
+                    this.Close();
                 }
                 catch (Exception ex)
                 {
@@ -465,6 +457,15 @@ namespace MyGameLauncher
             }
         }
 
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (!_isClosing)
+            {
+                e.Cancel = true;
+                _isClosing = true;
+                _closeTimer.Start();
+            }
+        }
         #region Window Dragging Handlers
         private void TitleBar_MouseDown(object sender, MouseEventArgs e)
         {
@@ -479,5 +480,37 @@ namespace MyGameLauncher
             if (_isDragging) { Point p = PointToScreen(e.Location); Location = new Point(p.X - _dragStartPoint.X, p.Y - _dragStartPoint.Y); }
         }
         #endregion
+
+        /// <summary>
+        /// 使用高质量插值算法来改变图像尺寸
+        /// </summary>
+        /// <param name="image">原始图像</param>
+        /// <param name="newSize">新的尺寸</param>
+        /// <returns>一个经过高质量缩放的新位图</returns>
+        private static Bitmap ResizeImage(Image image, Size newSize)
+        {
+            if (image == null) return null;
+            var destRect = new Rectangle(0, 0, newSize.Width, newSize.Height);
+            var destImage = new Bitmap(newSize.Width, newSize.Height);
+
+            destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+
+            using (var graphics = Graphics.FromImage(destImage))
+            {
+                graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+                using (var wrapMode = new System.Drawing.Imaging.ImageAttributes())
+                {
+                    wrapMode.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+                    graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
+                }
+            }
+
+            return destImage;
+        }
     }
 }
