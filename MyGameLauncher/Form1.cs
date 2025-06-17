@@ -55,7 +55,7 @@ namespace MyGameLauncher
         private readonly Dictionary<Control, AnimationState> _animatedControls = new Dictionary<Control, AnimationState>();
         private readonly Timer _animationTimer;
         private readonly Timer _fadeInTimer;
-        private Timer _closeTimer; 
+        private Timer _closeTimer;
         private bool _isClosing = false;
         #endregion
 
@@ -64,6 +64,10 @@ namespace MyGameLauncher
         {
             public string WindowTitle { get; set; } = "应用中心";
             public List<string> SupportedExtensions { get; set; } = new List<string> { ".exe", ".lnk", ".bat", ".jar" };
+
+            // --- 新增 ---
+            // 用于保存“保持开启”状态的配置项
+            public bool KeepLauncherOpen { get; set; } = false;
         }
         private AppSettings _settings;
         #endregion
@@ -75,6 +79,10 @@ namespace MyGameLauncher
 
         private const string AppsFolderName = "Apps";
         private const string ConfigFileName = "config.json";
+
+        // --- 新增 ---
+        // 复选框控件
+        private CheckBox _keepOpenCheckBox;
 
         public Form1()
         {
@@ -88,12 +96,31 @@ namespace MyGameLauncher
 
             _fadeInTimer = new Timer { Interval = 20 };
             _fadeInTimer.Tick += FadeInTimer_Tick;
-            _closeTimer = new Timer { Interval = 15 }; 
+            _closeTimer = new Timer { Interval = 15 };
             _closeTimer.Tick += CloseTimer_Tick;
             this.FormClosing += Form1_FormClosing;
-            LoadSettings();
+
+            // 注意：先设置UI，再加载配置，这样配置才能应用到UI上
             SetupModernUI();
+            LoadSettings();
             LoadApplications();
+        }
+
+        // --- 新增 ---
+        // 将保存配置的逻辑提取成一个独立方法
+        private void SaveSettings()
+        {
+            try
+            {
+                string configPath = Path.Combine(Application.StartupPath, ConfigFileName);
+                var options = new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+                string jsonString = JsonSerializer.Serialize(_settings, options);
+                File.WriteAllText(configPath, jsonString, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[日志] 保存配置文件失败: {ex.Message}");
+            }
         }
 
         private void LoadSettings()
@@ -115,9 +142,14 @@ namespace MyGameLauncher
             else
             {
                 _settings = new AppSettings();
-                var options = new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-                string jsonString = JsonSerializer.Serialize(_settings, options);
-                File.WriteAllText(configPath, jsonString, Encoding.UTF8);
+                SaveSettings(); // 调用保存方法，而不是重复代码
+            }
+
+            // --- 修改 ---
+            // 加载配置后，更新复选框的选中状态
+            if (_keepOpenCheckBox != null)
+            {
+                _keepOpenCheckBox.Checked = _settings.KeepLauncherOpen;
             }
         }
 
@@ -137,18 +169,65 @@ namespace MyGameLauncher
             this.BackColor = Color.White;
             this.flowLayoutPanel1.BackColor = this.BackColor;
 
-            this.Text = _settings.WindowTitle;
-
             this.Load += Form1_Load;
             this.Resize += (s, e) => AdjustLayout();
 
             SetupCustomTitleBar();
+
+            // --- 新增 ---
+            // 设置复选框
+            SetupKeepOpenCheckBox();
+        }
+
+        // --- 新增 ---
+        // 创建并配置复选框的方法
+        private void SetupKeepOpenCheckBox()
+        {
+            _keepOpenCheckBox = new CheckBox
+            {
+                Text = "启动后不关闭",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.DimGray,
+                BackColor = Color.Transparent, // 背景透明
+                // 使用 Anchor 属性使其自动停靠在右下角
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
+
+            // 计算其在右下角的位置（带一点边距）
+            int margin = 15;
+            _keepOpenCheckBox.Location = new Point(
+                this.ClientSize.Width - _keepOpenCheckBox.Width - margin,
+                this.ClientSize.Height - _keepOpenCheckBox.Height - margin
+            );
+
+            // 添加事件处理器，当勾选状态改变时保存设置
+            _keepOpenCheckBox.CheckedChanged += (s, e) =>
+            {
+                _settings.KeepLauncherOpen = _keepOpenCheckBox.Checked;
+                SaveSettings();
+            };
+
+            this.Controls.Add(_keepOpenCheckBox);
+            _keepOpenCheckBox.BringToFront(); // 确保它在最上层，不会被其他控件遮挡
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            this.Text = _settings.WindowTitle;
+            // 更新标题栏的文本
+            var titleBar = this.Controls.OfType<Panel>().FirstOrDefault(p => p.Dock == DockStyle.Top);
+            if (titleBar != null)
+            {
+                var titleLabel = titleBar.Controls.OfType<Label>().FirstOrDefault();
+                if (titleLabel != null)
+                {
+                    titleLabel.Text = this.Text;
+                }
+            }
+
             ApplyRoundCorners();
-            AdjustLayout(); 
+            AdjustLayout();
             _fadeInTimer.Start();
         }
 
@@ -175,7 +254,7 @@ namespace MyGameLauncher
 
             Label titleLabel = new Label
             {
-                Text = this.Text,
+                Text = this.Text, // 初始文本，将在Load事件中更新
                 ForeColor = Color.Black,
                 Font = new Font("Segoe UI Semibold", 10F),
                 Location = new Point(15, 7),
@@ -292,7 +371,7 @@ namespace MyGameLauncher
                     Dock = DockStyle.Bottom,
                     TextAlign = ContentAlignment.TopCenter,
                     Height = labelHeight,
-                    Padding = new Padding(5, 10, 5, 5), 
+                    Padding = new Padding(5, 10, 5, 5),
                     Tag = filePath,
                     BackColor = Color.Transparent
                 };
@@ -349,7 +428,7 @@ namespace MyGameLauncher
             int tilesPerRow = Math.Max(1, panelWidth / tileFullWidth);
             int totalContentWidth = tilesPerRow * tileFullWidth;
             int emptySpace = panelWidth - totalContentWidth;
-            int sidePadding = Math.Max(25, emptySpace / 2); 
+            int sidePadding = Math.Max(25, emptySpace / 2);
             flowLayoutPanel1.Padding = new Padding(sidePadding, 25, sidePadding, 25);
         }
 
@@ -411,11 +490,6 @@ namespace MyGameLauncher
             }
         }
 
-
-
-        /// <summary>
-        /// 关闭动画的核心逻辑
-        /// </summary>
         private void CloseTimer_Tick(object sender, EventArgs e)
         {
             if (this.Opacity > 0.05)
@@ -448,7 +522,17 @@ namespace MyGameLauncher
                 try
                 {
                     Process.Start(filePath);
-                    this.Close();
+
+                    // --- 修改 ---
+                    // 根据复选框的选中状态决定是否关闭
+                    if (!_settings.KeepLauncherOpen)
+                    {
+                        if (!_isClosing)
+                        {
+                            _isClosing = true;
+                            _closeTimer.Start();
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -481,12 +565,6 @@ namespace MyGameLauncher
         }
         #endregion
 
-        /// <summary>
-        /// 使用高质量插值算法来改变图像尺寸
-        /// </summary>
-        /// <param name="image">原始图像</param>
-        /// <param name="newSize">新的尺寸</param>
-        /// <returns>一个经过高质量缩放的新位图</returns>
         private static Bitmap ResizeImage(Image image, Size newSize)
         {
             if (image == null) return null;

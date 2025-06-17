@@ -7,14 +7,14 @@
       "RelativeMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|solutionrelative:mygamelauncher\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|e:\\work\\visual studio\\mygamelauncher\\mygamelauncher\\form1.resx||{FF4D6ACA-9352-4A5F-821E-F4D6EBDCAB11}",
+      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|E:\\Work\\Visual Studio\\MyGameLauncher\\mygamelauncher\\form1.resx||{FF4D6ACA-9352-4A5F-821E-F4D6EBDCAB11}",
       "RelativeMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|solutionrelative:mygamelauncher\\form1.resx||{FF4D6ACA-9352-4A5F-821E-F4D6EBDCAB11}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{00000000-0000-0000-0000-000000000000}|\u003CSolution\u003E|MyGameLauncher||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|e:\\work\\visual studio\\mygamelauncher\\mygamelauncher\\app.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|E:\\Work\\Visual Studio\\MyGameLauncher\\mygamelauncher\\app.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
       "RelativeMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|solutionrelative:mygamelauncher\\app.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
     },
     {
@@ -22,7 +22,7 @@
       "RelativeMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|solutionrelative:mygamelauncher\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|e:\\work\\visual studio\\mygamelauncher\\mygamelauncher\\highresiconextractor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|E:\\Work\\Visual Studio\\MyGameLauncher\\mygamelauncher\\highresiconextractor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|solutionrelative:mygamelauncher\\highresiconextractor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -30,9 +30,6 @@
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kc4064\\AppData\\Local\\Temp\\.vsdbgsrc\\e6e8f8e8d7101d3f6fdccc2c930135e6441633cadce205d620725d69747ae277\\Icon.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{6DBD3042-EB3B-4121-9691-2FDD959D6A93}|MyGameLauncher\\MyGameLauncher.csproj|e:\\work\\visual studio\\mygamelauncher\\mygamelauncher\\||{B270807C-D8C6-49EB-8EBE-8E8D566637A1}|6185191f-1008-4fb2-a715-3a4e4f27e610"
     }
   ],
   "DocumentGroupContainers": [
@@ -54,8 +51,7 @@
               "RelativeToolTip": "MyGameLauncher\\App.config",
               "ViewState": "AQIAAAAAAAAAAAAAAADwvwAAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000601|",
-              "WhenOpened": "2025-06-17T02:06:10.402Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-06-17T02:06:10.402Z"
             },
             {
               "$type": "Document",
@@ -66,8 +62,7 @@
               "ToolTip": "E:\\Work\\Visual Studio\\MyGameLauncher\\MyGameLauncher\\Form1.resx",
               "RelativeToolTip": "MyGameLauncher\\Form1.resx",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001005|",
-              "WhenOpened": "2025-06-17T01:58:41.534Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-06-17T01:58:41.534Z"
             },
             {
               "$type": "Document",
@@ -78,8 +73,7 @@
               "ToolTip": "E:\\Work\\Visual Studio\\MyGameLauncher\\MyGameLauncher\\MyGameLauncher.csproj",
               "RelativeToolTip": "MyGameLauncher\\MyGameLauncher.csproj",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2025-06-17T01:57:58.329Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-06-17T01:57:58.329Z"
             },
             {
               "$type": "Document",
@@ -113,8 +107,7 @@
               "RelativeToolTip": "MyGameLauncher\\HighResIconExtractor.cs",
               "ViewState": "AQIAAFYAAAAAAAAAAAAAAEoAAAAOAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-06-17T00:47:19.378Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-06-17T00:47:19.378Z"
             },
             {
               "$type": "Document",
@@ -124,7 +117,7 @@
               "RelativeDocumentMoniker": "MyGameLauncher\\Form1.cs",
               "ToolTip": "E:\\Work\\Visual Studio\\MyGameLauncher\\MyGameLauncher\\Form1.cs",
               "RelativeToolTip": "MyGameLauncher\\Form1.cs",
-              "ViewState": "AQIAANIAAAAAAAAAAAAAAN8AAAANAAAA",
+              "ViewState": "AQIAADwCAAAAAAAAAAAYwFICAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-06-16T08:49:52.367Z",
               "EditorCaption": ""
@@ -138,8 +131,7 @@
               "ToolTip": "E:\\Work\\Visual Studio\\MyGameLauncher\\MyGameLauncher\\Form1.cs [\u8BBE\u8BA1]",
               "RelativeToolTip": "MyGameLauncher\\Form1.cs [\u8BBE\u8BA1]",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-06-16T08:49:10.09Z",
-              "EditorCaption": " [\u8BBE\u8BA1]"
+              "WhenOpened": "2025-06-16T08:49:10.09Z"
             }
           ]
         }
