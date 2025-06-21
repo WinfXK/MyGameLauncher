@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -42,6 +43,36 @@ namespace MyGameLauncher
         [DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
         private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        public struct SHELLEXECUTEINFO
+        {
+            public int cbSize;
+            public uint fMask;
+            public IntPtr hwnd;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string lpVerb;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string lpFile;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string lpParameters;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string lpDirectory;
+            public int nShow;
+            public IntPtr hInstApp;
+            public IntPtr lpIDList;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string lpClass;
+            public IntPtr hkeyClass;
+            public uint dwHotKey;
+            public IntPtr hIcon;
+            public IntPtr hProcess;
+        }
+
+        private const uint SEE_MASK_INVOKEIDLIST = 12;
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO lpExecInfo);
+
         #endregion
 
         #region Animation Engine
@@ -64,9 +95,6 @@ namespace MyGameLauncher
         {
             public string WindowTitle { get; set; } = "应用中心";
             public List<string> SupportedExtensions { get; set; } = new List<string> { ".exe", ".lnk", ".bat", ".jar" };
-
-            // --- 新增 ---
-            // 用于保存“保持开启”状态的配置项
             public bool KeepLauncherOpen { get; set; } = false;
         }
         private AppSettings _settings;
@@ -80,9 +108,8 @@ namespace MyGameLauncher
         private const string AppsFolderName = "Apps";
         private const string ConfigFileName = "config.json";
 
-        // --- 新增 ---
-        // 复选框控件
         private CheckBox _keepOpenCheckBox;
+        private ContextMenuStrip _tileContextMenu;
 
         public Form1()
         {
@@ -100,14 +127,13 @@ namespace MyGameLauncher
             _closeTimer.Tick += CloseTimer_Tick;
             this.FormClosing += Form1_FormClosing;
 
-            // 注意：先设置UI，再加载配置，这样配置才能应用到UI上
             SetupModernUI();
+            SetupContextMenu();
+
             LoadSettings();
             LoadApplications();
         }
 
-        // --- 新增 ---
-        // 将保存配置的逻辑提取成一个独立方法
         private void SaveSettings()
         {
             try
@@ -142,11 +168,9 @@ namespace MyGameLauncher
             else
             {
                 _settings = new AppSettings();
-                SaveSettings(); // 调用保存方法，而不是重复代码
+                SaveSettings();
             }
 
-            // --- 修改 ---
-            // 加载配置后，更新复选框的选中状态
             if (_keepOpenCheckBox != null)
             {
                 _keepOpenCheckBox.Checked = _settings.KeepLauncherOpen;
@@ -166,6 +190,13 @@ namespace MyGameLauncher
             this.FormBorderStyle = FormBorderStyle.None;
             this.Padding = new Padding(0);
 
+            this.AllowDrop = true;
+            this.flowLayoutPanel1.AllowDrop = true;
+            this.DragEnter += Form1_DragEnter;
+            this.DragDrop += Form1_DragDrop;
+            this.flowLayoutPanel1.DragEnter += Form1_DragEnter;
+            this.flowLayoutPanel1.DragDrop += Form1_DragDrop;
+
             this.BackColor = Color.White;
             this.flowLayoutPanel1.BackColor = this.BackColor;
 
@@ -173,14 +204,9 @@ namespace MyGameLauncher
             this.Resize += (s, e) => AdjustLayout();
 
             SetupCustomTitleBar();
-
-            // --- 新增 ---
-            // 设置复选框
             SetupKeepOpenCheckBox();
         }
 
-        // --- 新增 ---
-        // 创建并配置复选框的方法
         private void SetupKeepOpenCheckBox()
         {
             _keepOpenCheckBox = new CheckBox
@@ -189,19 +215,16 @@ namespace MyGameLauncher
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = Color.DimGray,
-                BackColor = Color.Transparent, // 背景透明
-                // 使用 Anchor 属性使其自动停靠在右下角
+                BackColor = Color.Transparent,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             };
 
-            // 计算其在右下角的位置（带一点边距）
             int margin = 15;
             _keepOpenCheckBox.Location = new Point(
                 this.ClientSize.Width - _keepOpenCheckBox.Width - margin,
                 this.ClientSize.Height - _keepOpenCheckBox.Height - margin
             );
 
-            // 添加事件处理器，当勾选状态改变时保存设置
             _keepOpenCheckBox.CheckedChanged += (s, e) =>
             {
                 _settings.KeepLauncherOpen = _keepOpenCheckBox.Checked;
@@ -209,13 +232,12 @@ namespace MyGameLauncher
             };
 
             this.Controls.Add(_keepOpenCheckBox);
-            _keepOpenCheckBox.BringToFront(); // 确保它在最上层，不会被其他控件遮挡
+            _keepOpenCheckBox.BringToFront();
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             this.Text = _settings.WindowTitle;
-            // 更新标题栏的文本
             var titleBar = this.Controls.OfType<Panel>().FirstOrDefault(p => p.Dock == DockStyle.Top);
             if (titleBar != null)
             {
@@ -254,7 +276,7 @@ namespace MyGameLauncher
 
             Label titleLabel = new Label
             {
-                Text = this.Text, // 初始文本，将在Load事件中更新
+                Text = this.Text,
                 ForeColor = Color.Black,
                 Font = new Font("Segoe UI Semibold", 10F),
                 Location = new Point(15, 7),
@@ -316,20 +338,25 @@ namespace MyGameLauncher
                     Font = new Font("Segoe UI", 16F),
                     ForeColor = Color.DarkGray,
                     TextAlign = ContentAlignment.MiddleCenter,
-                    Size = this.flowLayoutPanel1.ClientSize
+                    Size = this.flowLayoutPanel1.ClientSize,
+                    Anchor = AnchorStyles.None
                 };
                 this.flowLayoutPanel1.Controls.Add(emptyLabel);
+                emptyLabel.Location = new Point(
+                    (flowLayoutPanel1.ClientSize.Width - emptyLabel.Width) / 2,
+                    (flowLayoutPanel1.ClientSize.Height - emptyLabel.Height) / 2
+                );
                 return;
             }
             this.flowLayoutPanel1.SuspendLayout();
             foreach (string filePath in allFiles)
             {
-                CreateApplicationTile(filePath);
+                CreateApplicationTile(filePath, false);
             }
             this.flowLayoutPanel1.ResumeLayout(true);
         }
 
-        private void CreateApplicationTile(string filePath)
+        private void CreateApplicationTile(string filePath, bool useAnimation)
         {
             string targetPath = filePath;
             if (Path.GetExtension(filePath).ToLower() == ".lnk")
@@ -349,7 +376,8 @@ namespace MyGameLauncher
                     Size = tileSize,
                     Margin = new Padding(15),
                     BackColor = this.flowLayoutPanel1.BackColor,
-                    Tag = filePath
+                    Tag = filePath,
+                    ContextMenuStrip = _tileContextMenu
                 };
 
                 PictureBox pictureBox = new PictureBox
@@ -358,7 +386,8 @@ namespace MyGameLauncher
                     Location = pictureBoxLocation,
                     Tag = filePath,
                     BackColor = Color.Transparent,
-                    SizeMode = PictureBoxSizeMode.Zoom
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    ContextMenuStrip = _tileContextMenu
                 };
 
                 pictureBox.Image = ResizeImage(sourceBitmap, pictureBoxSize);
@@ -373,7 +402,8 @@ namespace MyGameLauncher
                     Height = labelHeight,
                     Padding = new Padding(5, 10, 5, 5),
                     Tag = filePath,
-                    BackColor = Color.Transparent
+                    BackColor = Color.Transparent,
+                    ContextMenuStrip = _tileContextMenu
                 };
 
                 var hoverColor = Color.FromArgb(240, 240, 240);
@@ -413,6 +443,12 @@ namespace MyGameLauncher
                 tilePanel.Controls.Add(pictureBox);
                 tilePanel.Controls.Add(nameLabel);
                 this.flowLayoutPanel1.Controls.Add(tilePanel);
+
+                if (useAnimation)
+                {
+                    tilePanel.BackColor = Color.FromArgb(220, 235, 255);
+                    StartAnimation(tilePanel, this.flowLayoutPanel1.BackColor);
+                }
             }
         }
 
@@ -421,15 +457,24 @@ namespace MyGameLauncher
         {
             if (flowLayoutPanel1.Controls.Count == 0 || !flowLayoutPanel1.IsHandleCreated) return;
 
-            var firstTile = flowLayoutPanel1.Controls[0];
+            if (flowLayoutPanel1.Controls.Count == 1 && flowLayoutPanel1.Controls[0] is Label emptyLabel)
+            {
+                emptyLabel.Size = flowLayoutPanel1.ClientSize;
+                emptyLabel.Location = new Point(0, 0);
+                return;
+            }
+
+            var firstTile = flowLayoutPanel1.Controls.OfType<Panel>().FirstOrDefault();
+            if (firstTile == null) return;
+
             int tileFullWidth = firstTile.Width + firstTile.Margin.Left + firstTile.Margin.Right;
             int panelWidth = flowLayoutPanel1.ClientSize.Width;
             if (tileFullWidth <= 0) return;
             int tilesPerRow = Math.Max(1, panelWidth / tileFullWidth);
             int totalContentWidth = tilesPerRow * tileFullWidth;
             int emptySpace = panelWidth - totalContentWidth;
-            int sidePadding = Math.Max(25, emptySpace / 2);
-            flowLayoutPanel1.Padding = new Padding(sidePadding, 25, sidePadding, 25);
+            int sidePadding = Math.Max(40, emptySpace / 2);
+            flowLayoutPanel1.Padding = new Padding(sidePadding, 40, sidePadding, 40);
         }
 
         private void StartAnimation(Control control, Color targetColor)
@@ -454,6 +499,11 @@ namespace MyGameLauncher
             foreach (var kvp in _animatedControls.ToList())
             {
                 var control = kvp.Key;
+                if (control.IsDisposed)
+                {
+                    finishedAnimations.Add(control);
+                    continue;
+                }
                 var state = kvp.Value;
 
                 double elapsed = (DateTime.Now - state.StartTime).TotalMilliseconds;
@@ -504,8 +554,11 @@ namespace MyGameLauncher
         }
         #endregion
 
+        #region Event Handlers (Click, Closing, Dragging)
         private void Tile_Click(object sender, EventArgs e)
         {
+            if (e is MouseEventArgs me && me.Button == MouseButtons.Right) return;
+
             Control clickedControl = sender as Control;
             string filePath = "";
             if (clickedControl is Panel)
@@ -523,8 +576,6 @@ namespace MyGameLauncher
                 {
                     Process.Start(filePath);
 
-                    // --- 修改 ---
-                    // 根据复选框的选中状态决定是否关闭
                     if (!_settings.KeepLauncherOpen)
                     {
                         if (!_isClosing)
@@ -550,7 +601,7 @@ namespace MyGameLauncher
                 _closeTimer.Start();
             }
         }
-        #region Window Dragging Handlers
+
         private void TitleBar_MouseDown(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left) { _isDragging = true; _dragStartPoint = new Point(e.X, e.Y); }
@@ -565,6 +616,219 @@ namespace MyGameLauncher
         }
         #endregion
 
+        #region Drag and Drop
+        private void Form1_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Any(file => _settings.SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant())))
+                {
+                    e.Effect = DragDropEffects.Copy;
+                }
+                else
+                {
+                    e.Effect = DragDropEffects.None;
+                }
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+        private void Form1_DragDrop(object sender, DragEventArgs e)
+        {
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            string appsFolderPath = Path.Combine(Application.StartupPath, AppsFolderName);
+
+            var emptyLabel = flowLayoutPanel1.Controls.OfType<Label>().FirstOrDefault(l => l.Text.Contains("空空如也"));
+            if (emptyLabel != null)
+            {
+                flowLayoutPanel1.Controls.Remove(emptyLabel);
+                emptyLabel.Dispose();
+            }
+
+            this.flowLayoutPanel1.SuspendLayout();
+
+            foreach (var filePath in files)
+            {
+                if (!_settings.SupportedExtensions.Contains(Path.GetExtension(filePath).ToLowerInvariant()))
+                {
+                    continue;
+                }
+
+                string destFileName = Path.GetFileName(filePath);
+                string destPath = Path.Combine(appsFolderPath, destFileName);
+
+                if (File.Exists(destPath))
+                {
+                    MessageBox.Show($"文件 '{destFileName}' 已存在于 Apps 文件夹中。\n添加操作已中止。", "文件冲突", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    continue;
+                }
+
+                try
+                {
+                    File.Copy(filePath, destPath);
+                    CreateApplicationTile(destPath, true);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"无法添加文件 '{destFileName}'.\n\n错误: {ex.Message}", "添加失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            this.flowLayoutPanel1.ResumeLayout(true);
+            AdjustLayout();
+        }
+        #endregion
+
+        #region Context Menu
+        private void SetupContextMenu()
+        {
+            _tileContextMenu = new ContextMenuStrip();
+            _tileContextMenu.Renderer = new PinkMenuRenderer();
+            _tileContextMenu.Padding = new Padding(2, 2, 2, 2);
+            _tileContextMenu.Opening += OnContextMenuOpening;
+
+            var itemRunAsAdmin = new ToolStripMenuItem("以管理员身份运行", null, OnRunAsAdminClick) { Height = 30 };
+            var itemOpenLocation = new ToolStripMenuItem("打开文件位置", null, OnOpenLocationClick) { Height = 30 };
+            var itemProperties = new ToolStripMenuItem("属性", null, OnPropertiesClick) { Height = 30 };
+            var itemRemove = new ToolStripMenuItem("从列表中移除", null, OnRemoveClick) { Height = 30 };
+
+            _tileContextMenu.Items.Add(itemRunAsAdmin);
+            _tileContextMenu.Items.Add(itemOpenLocation);
+            _tileContextMenu.Items.Add(itemProperties);
+            _tileContextMenu.Items.Add(new ToolStripSeparator());
+            _tileContextMenu.Items.Add(itemRemove);
+        }
+
+        private void OnContextMenuOpening(object sender, CancelEventArgs e)
+        {
+            var menu = sender as ContextMenuStrip;
+            if (menu == null) return;
+
+            var sourceControl = menu.SourceControl;
+            if (sourceControl == null)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            Panel tilePanel = sourceControl as Panel ?? sourceControl.Parent as Panel;
+            if (tilePanel != null)
+            {
+                menu.Tag = tilePanel;
+            }
+            else
+            {
+                e.Cancel = true;
+            }
+        }
+
+        private void OnRunAsAdminClick(object sender, EventArgs e)
+        {
+            if (!GetTileAndPathFromSender(sender, out _, out string filePath)) return;
+
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo(filePath)
+                {
+                    Verb = "runas",
+                    UseShellExecute = true
+                };
+                Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"无法以管理员身份启动: {Path.GetFileName(filePath)}\n\n错误: {ex.Message}", "启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnOpenLocationClick(object sender, EventArgs e)
+        {
+            if (!GetTileAndPathFromSender(sender, out _, out string filePath)) return;
+
+            try
+            {
+                Process.Start("explorer.exe", $"/select, \"{filePath}\"");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"无法打开文件位置: {ex.Message}", "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnPropertiesClick(object sender, EventArgs e)
+        {
+            if (!GetTileAndPathFromSender(sender, out _, out string filePath)) return;
+
+            string targetPath = filePath;
+            if (Path.GetExtension(filePath).Equals(".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                targetPath = GetShortcutTarget(filePath);
+            }
+
+            ShowFileProperties(targetPath);
+        }
+
+        private void OnRemoveClick(object sender, EventArgs e)
+        {
+            if (!GetTileAndPathFromSender(sender, out Panel tilePanel, out string filePath)) return;
+
+            var result = MessageBox.Show($"您确定要从列表中移除 '{Path.GetFileNameWithoutExtension(filePath)}' 吗？\n\n这将从 Apps 文件夹中永久删除该文件。",
+                "确认移除", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    flowLayoutPanel1.Controls.Remove(tilePanel);
+                    tilePanel.Dispose();
+                    AdjustLayout();
+
+                    File.Delete(filePath);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"移除文件时出错: {ex.Message}", "移除失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private bool GetTileAndPathFromSender(object sender, out Panel tilePanel, out string filePath)
+        {
+            tilePanel = null;
+            filePath = null;
+
+            var menuItem = sender as ToolStripItem;
+            if (menuItem == null) return false;
+
+            var menu = menuItem.Owner as ContextMenuStrip;
+            if (menu == null) return false;
+
+            tilePanel = menu.Tag as Panel;
+            if (tilePanel == null) return false;
+
+            filePath = tilePanel.Tag as string;
+            return !string.IsNullOrEmpty(filePath);
+        }
+
+        public bool ShowFileProperties(string Filename)
+        {
+            SHELLEXECUTEINFO info = new SHELLEXECUTEINFO
+            {
+                cbSize = Marshal.SizeOf(typeof(SHELLEXECUTEINFO)),
+                hwnd = this.Handle,
+                lpVerb = "properties",
+                lpFile = Filename,
+                nShow = 1,
+                fMask = SEE_MASK_INVOKEIDLIST
+            };
+            return ShellExecuteEx(ref info);
+        }
+
+        #endregion
+
         private static Bitmap ResizeImage(Image image, Size newSize)
         {
             if (image == null) return null;
@@ -575,20 +839,129 @@ namespace MyGameLauncher
 
             using (var graphics = Graphics.FromImage(destImage))
             {
-                graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
-                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                graphics.CompositingMode = CompositingMode.SourceOver;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
                 using (var wrapMode = new System.Drawing.Imaging.ImageAttributes())
                 {
-                    wrapMode.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+                    wrapMode.SetWrapMode(WrapMode.TileFlipXY);
                     graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
                 }
             }
 
             return destImage;
         }
+
+        #region Custom Menu Renderer
+        private class PinkMenuRenderer : ToolStripProfessionalRenderer
+        {
+            // --- 修复：将颜色字段声明为 static readonly ---
+            private static readonly Color _backColor = Color.FromArgb(255, 250, 252);
+            private static readonly Color _hoverColor = Color.FromArgb(255, 230, 240);
+            private static readonly Color _borderColor = Color.FromArgb(255, 220, 230);
+            private static readonly Color _separatorColor = Color.FromArgb(255, 220, 230);
+            private const int MenuRadius = 8;
+
+            public PinkMenuRenderer() : base(new PinkColorTable())
+            {
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = e.AffectedBounds;
+                rect.Width--;
+                rect.Height--;
+
+                using (var path = GetRoundedRect(rect, MenuRadius))
+                {
+                    // --- 修复：引用静态字段 ---
+                    using (var pen = new Pen(_borderColor, 1))
+                    {
+                        g.DrawPath(pen, path);
+                    }
+                    if (e.ToolStrip.Region == null || e.ToolStrip.Region.GetBounds(g) != rect)
+                    {
+                        e.ToolStrip.Region = new Region(path);
+                    }
+                }
+            }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (!e.Item.Enabled) return;
+
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = new Rectangle(2, 1, e.Item.Width - 4, e.Item.Height - 2);
+
+                if (e.Item.Selected)
+                {
+                    // --- 修复：引用静态字段 ---
+                    using (var brush = new SolidBrush(_hoverColor))
+                    using (var path = GetRoundedRect(rect, MenuRadius - 2))
+                    {
+                        g.FillPath(brush, path);
+                    }
+                }
+                else
+                {
+                    base.OnRenderMenuItemBackground(e);
+                }
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                e.Item.ForeColor = e.Item.Selected ? Color.Black : Color.Black;
+                var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis;
+                var textRect = e.TextRectangle;
+                textRect.X += 8;
+                textRect.Width -= 8;
+                TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, textRect, e.TextColor, flags);
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                var rect = e.Item.ContentRectangle;
+                // --- 修复：引用静态字段 ---
+                using (var pen = new Pen(_separatorColor, 1))
+                {
+                    e.Graphics.DrawLine(pen, rect.Left + 25, rect.Y + rect.Height / 2, rect.Right - 5, rect.Y + rect.Height / 2);
+                }
+            }
+
+            private static GraphicsPath GetRoundedRect(Rectangle baseRect, int radius)
+            {
+                GraphicsPath path = new GraphicsPath();
+                if (radius <= 0) { path.AddRectangle(baseRect); return path; }
+                int diameter = radius * 2;
+                Rectangle arc = new Rectangle(baseRect.Location, new Size(diameter, diameter));
+                path.AddArc(arc, 180, 90);
+                arc.X = baseRect.Right - diameter;
+                path.AddArc(arc, 270, 90);
+                arc.Y = baseRect.Bottom - diameter;
+                path.AddArc(arc, 0, 90);
+                arc.X = baseRect.Left;
+                path.AddArc(arc, 90, 90);
+                path.CloseFigure();
+                return path;
+            }
+
+            // --- 修复：此类现在直接引用外部类的静态颜色字段 ---
+            private class PinkColorTable : ProfessionalColorTable
+            {
+                public override Color ToolStripDropDownBackground => _backColor;
+                public override Color MenuBorder => _borderColor;
+                public override Color MenuItemSelected => _hoverColor;
+                public override Color ImageMarginGradientBegin => _backColor;
+                public override Color ImageMarginGradientMiddle => _backColor;
+                public override Color ImageMarginGradientEnd => _backColor;
+            }
+        }
+        #endregion
     }
 }
